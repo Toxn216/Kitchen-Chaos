@@ -2,13 +2,22 @@ using JetBrains.Annotations;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-public class Player : MonoBehaviour,IKitchenObjectParent
+public class Player : NetworkBehaviour, IKitchenObjectParent
 {
 
-    public static Player Instance { get; private set; }//Ёто определение статического свойства Instance в классе Player
+    public static event EventHandler OnAnyPlayerSpawned;
+    public static event EventHandler OnAnyPickedSomething;
+
+    public static void ResetStaticData()
+    {
+        OnAnyPlayerSpawned = null;
+    }
+
+    public static Player LocalInstance { get; private set; }//Ёто определение статического свойства Instance в классе Player
 
     public event EventHandler OnPickedSomething;
     public event EventHandler<OnSelectedCounterChangeEventArgs> OnSelectedCounterChanged;//Ёто определение событи€ OnSelectedCounterChanged. Ёто событие типа EventHandler, параметризированное пользовательским классом OnSelectedCounterChangeEventArgs. —обытие объ€влено с модификатором public, что позвол€ет другим част€м кода подписыватьс€ на это событие.
@@ -22,7 +31,7 @@ public class Player : MonoBehaviour,IKitchenObjectParent
     }
 
     [SerializeField] private float moveSpeed;//скорость движени€
-    [SerializeField] private GameInput gameInput;//подрубаем гейм инпут
+    //[SerializeField] private GameInput gameInput;//подрубаем гейм инпут
     [SerializeField] private LayerMask countersLayerMask;
     [SerializeField] private Transform KitchenObjectHoldPoint;//точка где будут спаунитс€ префабы китчена
 
@@ -32,20 +41,25 @@ public class Player : MonoBehaviour,IKitchenObjectParent
     private KitchenObject kitchenObject;
 
 
-    private void Awake()
-    {
-        if(Instance != null)//если инстанс не ноль то ошибка иб игрок уже создан, если все ок то идем дальше( проста€ проверка)
-        {
-            Debug.LogError("There is more than one Player instance");
-        }
-        Instance = this;
+    //private void Awake()
+    //{        
+        //Instance = this;
         //это может использоватьс€ дл€ создани€ паттерна синглтона, где класс имеет только один экземпл€р,
         //и этот экземпл€р может быть получен из других частей кода через статическую переменную Instance.
-    }
+    //}
     private void Start()
     {
-        gameInput.OnInteractAction += GameInput_OnInteractAction;//подрубаем интерактивное действие
-        gameInput.OnInteractAlternateAction += GameInput_OnInteractAlternateAction;
+        GameInput.Instanse.OnInteractAction += GameInput_OnInteractAction;//подрубаем интерактивное действие
+        GameInput.Instanse.OnInteractAlternateAction += GameInput_OnInteractAlternateAction;
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        if (IsOwner)
+        {
+            LocalInstance = this;
+        }
+        OnAnyPlayerSpawned?.Invoke(this, EventArgs.Empty);
     }
 
     private void GameInput_OnInteractAlternateAction(object sender, EventArgs e)
@@ -70,6 +84,12 @@ public class Player : MonoBehaviour,IKitchenObjectParent
 
     private void Update()
     {
+
+        if (!IsOwner)
+        {
+            return;
+        }
+
         HandleMovement();
         HandleInteractions();
     }
@@ -80,7 +100,7 @@ public class Player : MonoBehaviour,IKitchenObjectParent
     }
     private void HandleInteractions()//–ейкат который может интерактировать с обьктами
     {
-        Vector2 inputVector = gameInput.GetMovmentVectorNormalized();//инпут вектору мы задаем координаты метода из гейминпут
+        Vector2 inputVector = GameInput.Instanse.GetMovmentVectorNormalized();//инпут вектору мы задаем координаты метода из гейминпут
 
         Vector3 moveDir = new Vector3(inputVector.x, 0f, inputVector.y);//переводим в вектор 3
 
@@ -112,7 +132,7 @@ public class Player : MonoBehaviour,IKitchenObjectParent
 
     private void HandleMovement()
     {
-        Vector2 inputVector = gameInput.GetMovmentVectorNormalized();//инпут вектору мы задаем координаты метода из гейминпут
+        Vector2 inputVector = GameInput.Instanse.GetMovmentVectorNormalized();//инпут вектору мы задаем координаты метода из гейминпут
 
         Vector3 moveDir = new Vector3(inputVector.x, 0f, inputVector.y);//ѕереводим в вектор 3 ибо по другому ошибка будет
 
@@ -184,6 +204,7 @@ public class Player : MonoBehaviour,IKitchenObjectParent
         if(kitchenObject != null)
         {
             OnPickedSomething?.Invoke(this, EventArgs.Empty);
+            OnAnyPickedSomething?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -200,5 +221,10 @@ public class Player : MonoBehaviour,IKitchenObjectParent
     public bool HasKitchenObject()
     {
         return kitchenObject != null;
+    }
+
+    public NetworkObject GetNetworkObject()
+    {
+        return NetworkObject;
     }
 }
