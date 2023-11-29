@@ -8,13 +8,33 @@ public class KitchenObject : NetworkBehaviour
     [SerializeField] private KitchenObjectSO kitchenObjectSO;//все китчен обджексы будут тут (как я понил)
 
     private IKitchenObjectParent kitchenObjectParent;
+    private FollowTransform followTransform;
 
+    protected virtual void Awake()
+    {
+        followTransform = GetComponent<FollowTransform>();
+    }
     public KitchenObjectSO GetKitchenObjectSO()
     {
         return kitchenObjectSO;
     }
     public void SetKitchenObjectParent(IKitchenObjectParent KitchenObjectParent)
     {
+        SetKitchenObjectParentServerRpc(KitchenObjectParent.GetNetworkObject());
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void SetKitchenObjectParentServerRpc(NetworkObjectReference kitchenObjectParentNetworkObjectReference)
+    {
+        SetKitchenObjectParentClientRpc(kitchenObjectParentNetworkObjectReference);
+    }
+
+    [ClientRpc]
+    private void SetKitchenObjectParentClientRpc(NetworkObjectReference kitchenObjectParentNetworkObjectReference)
+    {
+        kitchenObjectParentNetworkObjectReference.TryGet(out NetworkObject kitchenObjectParentNetworkObject);
+        IKitchenObjectParent KitchenObjectParent = kitchenObjectParentNetworkObject.GetComponent<IKitchenObjectParent>();
+
         if (this.kitchenObjectParent != null)//Назаначаем нового родителя если не ноль
         {
             this.kitchenObjectParent.ClearKitchenObject();//новій родитель
@@ -29,9 +49,9 @@ public class KitchenObject : NetworkBehaviour
 
         KitchenObjectParent.SetKitchenObject(this);//Назначили китчен обджектс
 
-        //transform.parent = KitchenObjectParent.GetKitchenObjectFollowTransform();
-        //transform.localPosition = Vector3.zero;
+        followTransform.SetTargetTransform(KitchenObjectParent.GetKitchenObjectFollowTransform());
     }
+
     public IKitchenObjectParent GetKitchenObjectParent()
     {
         return kitchenObjectParent;
